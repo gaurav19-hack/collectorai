@@ -16,12 +16,14 @@ from flask import (
     Flask, render_template, request, redirect,
     url_for, flash, jsonify, send_from_directory
 )
+from flask_cors import CORS
 from werkzeug.utils import secure_filename
 # ─── Add ai/ to Python path ─────────────────────────────────────────────────
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "ai"))
 from garbage_detection import detect_garbage
 # ─── App Configuration ───────────────────────────────────────────────────────
 app = Flask(__name__)
+CORS(app)
 app.secret_key = "cleantrack_ai_secret_key_2024"
 BASE_DIR = Path(__file__).parent
 UPLOAD_FOLDER = BASE_DIR / "static" / "uploads"
@@ -353,6 +355,26 @@ def api_stats():
     stats["daily_trend"] = daily_trend
     return jsonify(stats)
 # ─── App Entry Point ─────────────────────────────────────────────────────────
+@app.route("/api/report", methods=["POST"])
+def report_issue():
+    data = request.json
+
+    title = data.get("title")
+    issue_type = data.get("type")
+    description = data.get("description")
+    location = data.get("location")
+
+    print("New Complaint")
+    print(title)
+    print(issue_type)
+    print(description)
+    print(location)
+
+    return jsonify({
+        "success": True,
+        "message": "Complaint received successfully"
+    })
+
 if __name__ == "__main__":
     init_db()
     print("\n" + "=" * 55)
