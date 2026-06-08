@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Track Complaint #{{ complaint.id }} — CleanTrack AI</title>
+  <meta name="description" content="Track the status of your garbage complaint #{{ complaint.id }} on CleanTrack AI." />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <style>
+    .track-layout {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 2rem;
+      padding-bottom: 4rem;
+    }
+    @media (max-width: 800px) {
+      .track-layout { grid-template-columns: 1fr; }
+    }
+    .timeline {
+      position: relative;
+      padding-left: 2rem;
+    }
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 0.55rem;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: var(--clr-border);
+    }
+    .timeline-item {
+      position: relative;
+      padding-bottom: 2rem;
+    }
+    .timeline-dot {
+      position: absolute;
+      left: -1.75rem;
+      top: 0.2rem;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid var(--clr-border);
+      background: var(--clr-bg-card);
+    }
+    .timeline-item.active .timeline-dot {
+      background: var(--clr-primary);
+      border-color: var(--clr-primary);
+      box-shadow: 0 0 10px var(--clr-primary-glow);
+    }
+    .timeline-item.done .timeline-dot {
+      background: var(--clr-primary);
+      border-color: var(--clr-primary);
+    }
+    .timeline-label {
+      font-weight: 600;
+      font-size: 0.95rem;
+      margin-bottom: 0.2rem;
+    }
+    .timeline-desc {
+      font-size: 0.82rem;
+      color: var(--clr-text-muted);
+    }
+  </style>
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar">
+    <div class="navbar-inner">
+      <a href="/" class="navbar-brand">
+        <div class="brand-icon">🌿</div>
+        <span class="brand-name">Clean<span>Track</span> AI</span>
+      </a>
+      <ul class="navbar-nav">
+        <li><a href="/" class="nav-link">Home</a></li>
+        <li><a href="/citizen" class="nav-link active">Report</a></li>
+        <li><a href="/authority" class="nav-link">Authority</a></li>
+        <li><a href="/admin" class="nav-link">Admin</a></li>
+      </ul>
+    </div>
+  </nav>
+  <div class="container">
+    <div class="page-header">
+      <h1>Complaint #{{ complaint.id }}</h1>
+      <p>Track the status and details of your submitted complaint</p>
+    </div>
+    <div class="track-layout">
+      <!-- Main Content -->
+      <div>
+        <!-- Status Banner -->
+        <div class="card mb-3" style="
+          {% if complaint.status == 'Resolved' %}
+            background: rgba(34,197,94,0.08); border-color: rgba(34,197,94,0.25);
+          {% elif complaint.status == 'Escalated' %}
+            background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.25);
+          {% elif complaint.status == 'In Progress' %}
+            background: rgba(59,130,246,0.08); border-color: rgba(59,130,246,0.25);
+          {% else %}
+            background: rgba(245,158,11,0.08); border-color: rgba(245,158,11,0.25);
+          {% endif %}
+        ">
+          <div class="d-flex align-center justify-between flex-wrap gap-1">
+            <div>
+              <h2 style="font-size:1.3rem;margin-bottom:0.3rem">
+                {% if complaint.status == 'Resolved' %}✅
+                {% elif complaint.status == 'Escalated' %}🚨
+                {% elif complaint.status == 'In Progress' %}🔄
+                {% else %}⏳{% endif %}
+                {{ complaint.status }}
+              </h2>
+              <p class="text-muted text-sm">Last updated status of your complaint</p>
+            </div>
+            <span class="badge badge-{{ complaint.status | lower | replace(' ', '') }}">
+              {{ complaint.status }}
+            </span>
+          </div>
+        </div>
+        <!-- Complaint Image -->
+        {% if complaint.image %}
+        <div class="card mb-3">
+          <h3 class="mb-2" style="font-size:1rem">📷 Submitted Photo</h3>
+          <div class="complaint-image-wrap">
+            <img src="{{ url_for('uploaded_file', filename=complaint.image) }}" alt="Complaint image" />
+          </div>
+        </div>
+        {% endif %}
+        <!-- Description -->
+        {% if complaint.description %}
+        <div class="card mb-3">
+          <h3 class="mb-2" style="font-size:1rem">📝 Description</h3>
+          <p style="color:var(--clr-text-muted);line-height:1.7">{{ complaint.description }}</p>
+        </div>
+        {% endif %}
+        <!-- AI Analysis Result -->
+        <div class="card mb-3">
+          <h3 class="mb-2" style="font-size:1rem">🤖 AI Verification Result</h3>
+          <div class="d-flex align-center gap-1 flex-wrap">
+            {% if complaint.ai_result == 'Garbage Detected' %}
+              <span class="ai-detected">🗑️ Garbage Detected</span>
+            {% elif complaint.ai_result == 'No Garbage Detected' %}
+              <span class="ai-clean">✅ No Garbage Detected</span>
+            {% else %}
+              <span class="badge" style="background:rgba(100,116,139,0.15);color:#94a3b8">
+                🤖 {{ complaint.ai_result or 'Pending Analysis' }}
+              </span>
+            {% endif %}
+            {% if complaint.ai_confidence %}
+            <span class="text-muted text-sm">
+              (Confidence: {{ (complaint.ai_confidence * 100) | round(1) }}%)
+            </span>
+            {% endif %}
+          </div>
+        </div>
+        <!-- Resolution Proof -->
+        {% if complaint.resolution_image %}
+        <div class="card mb-3">
+          <h3 class="mb-2" style="font-size:1rem">✅ Resolution Proof</h3>
+          <p class="text-muted text-sm mb-2">Photo uploaded by sanitation authority after cleanup:</p>
+          <div class="complaint-image-wrap">
+            <img src="{{ url_for('uploaded_file', filename=complaint.resolution_image) }}" alt="Resolution proof" />
+          </div>
+        </div>
+        {% endif %}
+      </div>
+      <!-- Sidebar -->
+      <div>
+        <!-- Complaint Details -->
+        <div class="card mb-3">
+          <h3 style="font-size:1rem;margin-bottom:1.25rem">📋 Complaint Details</h3>
+          <div style="display:flex;flex-direction:column;gap:0.9rem">
+            <div>
+              <p class="text-xs text-dim" style="text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.2rem">Complaint ID</p>
+              <p class="fw-600">#{{ complaint.id }}</p>
+            </div>
+            <div>
+              <p class="text-xs text-dim" style="text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.2rem">Submitted On</p>
+              <p class="fw-600">{{ complaint.date }}</p>
+            </div>
+            {% if complaint.location_name %}
+            <div>
+              <p class="text-xs text-dim" style="text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.2rem">Location</p>
+              <p class="fw-600">{{ complaint.location_name }}</p>
+            </div>
+            {% endif %}
+            {% if complaint.latitude and complaint.longitude %}
+            <div>
+              <p class="text-xs text-dim" style="text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.2rem">GPS Coordinates</p>
+              <span class="location-chip">
+                📍 {{ complaint.latitude | round(4) }}, {{ complaint.longitude | round(4) }}
+              </span>
+              <div style="margin-top:0.75rem">
+                <a
+                  href="https://maps.google.com/?q={{ complaint.latitude }},{{ complaint.longitude }}"
+                  target="_blank"
+                  class="btn btn-secondary btn-sm"
+                  style="width:100%;justify-content:center"
+                >
+                  🗺️ Open in Google Maps
+                </a>
+              </div>
+            </div>
+            {% endif %}
+            <div>
+              <p class="text-xs text-dim" style="text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.2rem">Current Status</p>
+              <span class="badge badge-{{ complaint.status | lower | replace(' ', '') }}">
+                {{ complaint.status }}
+              </span>
+            </div>
+          </div>
+        </div>
+        <!-- Progress Timeline -->
+        <div class="card">
+          <h3 style="font-size:1rem;margin-bottom:1.25rem">📍 Progress Timeline</h3>
+          <div class="timeline">
+            <div class="timeline-item {% if complaint.status in ['Pending','In Progress','Resolved','Escalated'] %}done{% endif %}">
+              <div class="timeline-dot"></div>
+              <p class="timeline-label">✅ Submitted</p>
+              <p class="timeline-desc">Complaint received and logged</p>
+            </div>
+            <div class="timeline-item {% if complaint.status in ['In Progress','Resolved'] %}done{% elif complaint.status == 'Escalated' %}active{% endif %}">
+              <div class="timeline-dot"></div>
+              <p class="timeline-label">🤖 AI Verified</p>
+              <p class="timeline-desc">Image analyzed by YOLOv8</p>
+            </div>
+            <div class="timeline-item {% if complaint.status == 'Resolved' %}done{% elif complaint.status == 'In Progress' %}active{% endif %}">
+              <div class="timeline-dot"></div>
+              <p class="timeline-label">🔄 In Progress</p>
+              <p class="timeline-desc">Authority dispatched cleanup team</p>
+            </div>
+            {% if complaint.status == 'Escalated' %}
+            <div class="timeline-item active">
+              <div class="timeline-dot" style="background:var(--clr-danger);border-color:var(--clr-danger)"></div>
+              <p class="timeline-label" style="color:var(--clr-danger)">🚨 Escalated</p>
+              <p class="timeline-desc">Unresolved for 10+ days</p>
+            </div>
+            {% endif %}
+            <div class="timeline-item {% if complaint.status == 'Resolved' %}active{% endif %}">
+              <div class="timeline-dot"></div>
+              <p class="timeline-label">✅ Resolved</p>
+              <p class="timeline-desc">Cleanup completed and confirmed</p>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:1.5rem">
+          <a href="/citizen" class="btn btn-outline" style="width:100%;justify-content:center">
+            ← Report Another Issue
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <p>🌿 <strong>CleanTrack AI</strong> — Complaint Tracking</p>
+    </div>
+  </footer>
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

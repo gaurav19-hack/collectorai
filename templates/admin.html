@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Dashboard — CleanTrack AI</title>
+  <meta name="description" content="CleanTrack AI administrator dashboard with full complaint oversight and analytics." />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <!-- Chart.js for analytics -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    .analytics-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    @media (max-width: 768px) {
+      .analytics-grid { grid-template-columns: 1fr; }
+    }
+    .chart-card {
+      background: var(--clr-bg-card);
+      border: 1px solid var(--clr-border);
+      border-radius: var(--radius-lg);
+      padding: 1.5rem;
+    }
+    .chart-card h3 {
+      font-size: 0.95rem;
+      color: var(--clr-text-muted);
+      margin-bottom: 1.25rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+    }
+    .admin-table-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+    .resolution-rate-ring {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+    }
+    .rate-text {
+      font-family: var(--font-head);
+      font-size: 2.5rem;
+      font-weight: 800;
+      color: var(--clr-primary);
+    }
+    .rate-label {
+      font-size: 0.82rem;
+      color: var(--clr-text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    /* Donut chart wrapper */
+    .donut-wrap {
+      max-width: 220px;
+      margin: 0 auto;
+    }
+    .trend-controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.25rem;
+    }
+    .section-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin-bottom: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    /* Overflow table fix */
+    .admin-table td { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .admin-table td.desc-cell { max-width: 220px; }
+  </style>
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar">
+    <div class="navbar-inner">
+      <a href="/" class="navbar-brand">
+        <div class="brand-icon">🌿</div>
+        <span class="brand-name">Clean<span>Track</span> AI</span>
+      </a>
+      <ul class="navbar-nav">
+        <li><a href="/" class="nav-link">Home</a></li>
+        <li><a href="/citizen" class="nav-link">Report</a></li>
+        <li><a href="/authority" class="nav-link">Authority</a></li>
+        <li><a href="/admin" class="nav-link active">Admin</a></li>
+      </ul>
+    </div>
+  </nav>
+  <!-- Flash Messages -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+  <div class="alert-container">
+    {% for category, message in messages %}
+    <div class="alert alert-{{ category }}">
+      <span>{{ message | safe }}</span>
+      <button class="alert-close" onclick="dismissAlert(this.closest('.alert'))">✕</button>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% endwith %}
+  <div class="container">
+    <div class="page-header">
+      <h1>⚙️ Admin Dashboard</h1>
+      <p>Complete overview of all complaints and platform analytics</p>
+    </div>
+    <!-- ── Statistics ── -->
+    <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">
+      <div class="stat-card total">
+        <span class="stat-icon">📋</span>
+        <div class="stat-number" data-target="{{ stats.total }}">{{ stats.total }}</div>
+        <div class="stat-label">Total Complaints</div>
+      </div>
+      <div class="stat-card pending">
+        <span class="stat-icon">⏳</span>
+        <div class="stat-number" data-target="{{ stats.pending }}">{{ stats.pending }}</div>
+        <div class="stat-label">Pending</div>
+      </div>
+      <div class="stat-card progress">
+        <span class="stat-icon">🔄</span>
+        <div class="stat-number" data-target="{{ stats.in_progress }}">{{ stats.in_progress }}</div>
+        <div class="stat-label">In Progress</div>
+      </div>
+      <div class="stat-card resolved">
+        <span class="stat-icon">✅</span>
+        <div class="stat-number" data-target="{{ stats.resolved }}">{{ stats.resolved }}</div>
+        <div class="stat-label">Resolved</div>
+      </div>
+      <div class="stat-card escalated">
+        <span class="stat-icon">🚨</span>
+        <div class="stat-number" data-target="{{ stats.escalated }}">{{ stats.escalated }}</div>
+        <div class="stat-label">Escalated</div>
+      </div>
+      <div class="stat-card" style="border-color:rgba(245,158,11,0.2)">
+        <span class="stat-icon">📅</span>
+        <div class="stat-number" style="color:var(--clr-accent)" data-target="{{ stats.recent_submissions }}">{{ stats.recent_submissions }}</div>
+        <div class="stat-label">Last 7 Days</div>
+      </div>
+    </div>
+    <!-- ── Resolution Rate Banner ── -->
+    <div class="card mb-4" style="background:linear-gradient(135deg,rgba(34,197,94,0.08),rgba(59,130,246,0.08));
+      border-color:rgba(34,197,94,0.2);display:flex;align-items:center;gap:2rem;flex-wrap:wrap">
+      <div>
+        <p class="text-xs text-dim mb-1" style="text-transform:uppercase;letter-spacing:0.05em">Overall Resolution Rate</p>
+        <div style="font-family:var(--font-head);font-size:3rem;font-weight:800;color:var(--clr-primary);line-height:1">
+          {{ stats.resolution_rate }}%
+        </div>
+      </div>
+      <div style="flex:1;min-width:200px">
+        <div style="display:flex;justify-content:space-between;font-size:0.82rem;color:var(--clr-text-muted);margin-bottom:0.5rem">
+          <span>Progress towards 100%</span>
+          <span>{{ stats.resolved }}/{{ stats.total }}</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" style="width:{{ stats.resolution_rate }}%"></div>
+        </div>
+      </div>
+      <div style="text-align:right">
+        <p class="text-xs text-dim">AI Detections</p>
+        <p class="fw-600" style="color:var(--clr-danger)">🗑️ {{ stats.garbage_detected }} garbage found</p>
+        <p class="fw-600" style="color:var(--clr-primary)">✅ {{ stats.no_garbage }} clean</p>
+      </div>
+    </div>
+    <!-- ── Charts ── -->
+    <div class="analytics-grid">
+      <!-- Donut Chart -->
+      <div class="chart-card">
+        <h3>📊 Complaints by Status</h3>
+        <div class="donut-wrap">
+          <canvas id="statusChart"></canvas>
+        </div>
+      </div>
+      <!-- Trend Chart -->
+      <div class="chart-card">
+        <h3>📈 14-Day Submission Trend</h3>
+        <canvas id="trendChart" style="max-height:200px"></canvas>
+      </div>
+    </div>
+    <!-- ── Complaints Table ── -->
+    <div class="section-title">📋 All Complaints</div>
+    {% if complaints %}
+    <div class="table-wrapper">
+      <table class="table admin-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Image</th>
+            <th>Date</th>
+            <th>Location</th>
+            <th class="desc-cell">Description</th>
+            <th>AI Result</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for complaint in complaints %}
+          <tr>
+            <td><strong>#{{ complaint.id }}</strong></td>
+            <td>
+              {% if complaint.image %}
+              <img
+                class="table-img"
+                src="{{ url_for('uploaded_file', filename=complaint.image) }}"
+                alt="#{{ complaint.id }}"
+                style="cursor:pointer"
+                onclick="openModal('admin-img-{{ complaint.id }}')"
+                title="Click to enlarge"
+              />
+              {% else %}
+              <div style="width:56px;height:56px;border-radius:8px;background:rgba(255,255,255,0.04);
+                display:flex;align-items:center;justify-content:center;font-size:1.5rem">📷</div>
+              {% endif %}
+            </td>
+            <td>{{ complaint.date[:10] }}</td>
+            <td>
+              {% if complaint.latitude and complaint.longitude %}
+              <a href="https://maps.google.com/?q={{ complaint.latitude }},{{ complaint.longitude }}"
+                 target="_blank" class="location-chip" style="text-decoration:none">
+                📍 {{ "%.3f"|format(complaint.latitude) }}, {{ "%.3f"|format(complaint.longitude) }}
+              </a>
+              {% elif complaint.location_name %}
+              <span class="text-sm">{{ complaint.location_name | truncate(30) }}</span>
+              {% else %}
+              <span class="text-dim text-sm">—</span>
+              {% endif %}
+            </td>
+            <td class="desc-cell">
+              <span title="{{ complaint.description }}">
+                {{ (complaint.description or '—') | truncate(40) }}
+              </span>
+            </td>
+            <td>
+              {% if complaint.ai_result == 'Garbage Detected' %}
+                <span class="ai-detected">🗑️ Detected</span>
+              {% elif complaint.ai_result == 'No Garbage Detected' %}
+                <span class="ai-clean">✅ Clean</span>
+              {% else %}
+                <span class="text-dim text-sm">—</span>
+              {% endif %}
+            </td>
+            <td>
+              <span class="badge badge-{{ complaint.status | lower | replace(' ', '') }}">
+                {{ complaint.status }}
+              </span>
+            </td>
+            <td>
+              <div class="admin-table-actions">
+                <a href="/track/{{ complaint.id }}" class="btn btn-outline btn-sm" target="_blank" title="View details">👁️</a>
+                <form method="POST" action="/admin/delete/{{ complaint.id }}"
+                  onsubmit="return confirm('Delete complaint #{{ complaint.id }}? This cannot be undone.')">
+                  <button type="submit" class="btn btn-danger btn-sm" title="Delete">🗑️</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          <!-- Image lightbox -->
+          {% if complaint.image %}
+          <div class="modal-overlay" id="admin-img-{{ complaint.id }}">
+            <div class="modal" style="max-width:700px;padding:0;overflow:hidden;background:transparent;border:none;position:relative">
+              <img
+                src="{{ url_for('uploaded_file', filename=complaint.image) }}"
+                alt="#{{ complaint.id }}"
+                style="width:100%;border-radius:var(--radius-xl);display:block"
+              />
+              <button
+                onclick="closeModal('admin-img-{{ complaint.id }}')"
+                style="position:absolute;top:1rem;right:1rem;background:rgba(0,0,0,0.7);
+                  border:none;color:#fff;border-radius:50%;width:36px;height:36px;
+                  font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center"
+              >✕</button>
+            </div>
+          </div>
+          {% endif %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <span class="empty-icon">📭</span>
+      <h3>No complaints yet</h3>
+      <p class="text-muted">No complaints have been submitted to the platform.</p>
+      <a href="/citizen" class="btn btn-primary mt-2">Submit First Complaint →</a>
+    </div>
+    {% endif %}
+  </div>
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <p>🌿 <strong>CleanTrack AI</strong> — Administrator Control Panel</p>
+    </div>
+  </footer>
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+  <script>
+    // ── Chart.js: Donut Status Chart ──────────────────────────────────────────
+    (function () {
+      var ctx = document.getElementById('statusChart');
+      if (!ctx) return;
+      new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Pending', 'In Progress', 'Resolved', 'Escalated'],
+          datasets: [{
+            data: [
+              {{ stats.pending }},
+              {{ stats.in_progress }},
+              {{ stats.resolved }},
+              {{ stats.escalated }}
+            ],
+            backgroundColor: [
+              'rgba(245,158,11,0.75)',
+              'rgba(59,130,246,0.75)',
+              'rgba(34,197,94,0.75)',
+              'rgba(239,68,68,0.75)'
+            ],
+            borderColor: [
+              'rgba(245,158,11,1)',
+              'rgba(59,130,246,1)',
+              'rgba(34,197,94,1)',
+              'rgba(239,68,68,1)'
+            ],
+            borderWidth: 2,
+            hoverOffset: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          cutout: '65%',
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: {
+                color: '#94a3b8',
+                font: { size: 11 },
+                padding: 12
+              }
+            }
+          }
+        }
+      });
+    })();
+    // ── Chart.js: 14-Day Trend ────────────────────────────────────────────────
+    (function () {
+      fetch('/api/stats')
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          var ctx = document.getElementById('trendChart');
+          if (!ctx || !data.daily_trend) return;
+          var labels = data.daily_trend.map(function (d) {
+            var parts = d.date.split('-');
+            return parts[2] + '/' + parts[1];
+          });
+          var counts = data.daily_trend.map(function (d) { return d.count; });
+          new Chart(ctx, {
+            type: 'line',
+            data: {
+              labels: labels,
+              datasets: [{
+                label: 'Complaints',
+                data: counts,
+                borderColor: 'rgba(34,197,94,1)',
+                backgroundColor: 'rgba(34,197,94,0.08)',
+                borderWidth: 2,
+                pointBackgroundColor: 'rgba(34,197,94,1)',
+                pointRadius: 4,
+                tension: 0.4,
+                fill: true
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { display: false }
+              },
+              scales: {
+                x: {
+                  grid: { color: 'rgba(255,255,255,0.04)' },
+                  ticks: { color: '#64748b', font: { size: 10 } }
+                },
+                y: {
+                  beginAtZero: true,
+                  grid: { color: 'rgba(255,255,255,0.04)' },
+                  ticks: { color: '#64748b', stepSize: 1 }
+                }
+              }
+            }
+          });
+        })
+        .catch(function () {});
+    })();
+  </script>
+</body>
+</html>

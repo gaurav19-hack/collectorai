@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Authority Dashboard — CleanTrack AI</title>
+  <meta name="description" content="Sanitation authority dashboard to view, manage, and resolve garbage complaints." />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <style>
+    .complaint-card {
+      background: var(--clr-bg-card);
+      border: 1px solid var(--clr-border);
+      border-radius: var(--radius-lg);
+      padding: 1.5rem;
+      margin-bottom: 1.25rem;
+      transition: border-color 0.3s, box-shadow 0.3s;
+    }
+    .complaint-card:hover {
+      border-color: var(--clr-border-glow);
+      box-shadow: var(--shadow-glow);
+    }
+    .complaint-card.escalated {
+      border-color: rgba(239,68,68,0.3);
+      background: rgba(239,68,68,0.04);
+    }
+    .complaint-card.resolved {
+      border-color: rgba(34,197,94,0.2);
+      opacity: 0.8;
+    }
+    .complaint-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    .complaint-thumb {
+      width: 80px;
+      height: 80px;
+      object-fit: cover;
+      border-radius: 10px;
+      border: 1px solid var(--clr-border);
+      flex-shrink: 0;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    .complaint-thumb:hover { transform: scale(1.05); }
+    .complaint-meta { flex: 1; min-width: 0; }
+    .complaint-meta h3 { font-size: 1rem; margin-bottom: 0.35rem; }
+    .complaint-info-row {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.75rem;
+      font-size: 0.82rem;
+      color: var(--clr-text-muted);
+    }
+    .update-form {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--clr-border);
+      border-radius: var(--radius);
+      padding: 1rem;
+      margin-top: 1rem;
+    }
+    .update-form-row {
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-end;
+      flex-wrap: wrap;
+    }
+    .update-form select { flex: 1; min-width: 150px; }
+    .resolution-upload {
+      margin-top: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 0.83rem;
+      color: var(--clr-text-muted);
+    }
+    .resolution-upload label {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      cursor: pointer;
+      padding: 0.5rem 0.9rem;
+      background: rgba(34,197,94,0.08);
+      border: 1px solid rgba(34,197,94,0.2);
+      border-radius: var(--radius);
+      color: var(--clr-primary);
+      font-size: 0.83rem;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    .resolution-upload label:hover {
+      background: rgba(34,197,94,0.15);
+    }
+    .resolution-upload input[type="file"] { display: none; }
+  </style>
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar">
+    <div class="navbar-inner">
+      <a href="/" class="navbar-brand">
+        <div class="brand-icon">🌿</div>
+        <span class="brand-name">Clean<span>Track</span> AI</span>
+      </a>
+      <ul class="navbar-nav">
+        <li><a href="/" class="nav-link">Home</a></li>
+        <li><a href="/citizen" class="nav-link">Report</a></li>
+        <li><a href="/authority" class="nav-link active">Authority</a></li>
+        <li><a href="/admin" class="nav-link">Admin</a></li>
+      </ul>
+    </div>
+  </nav>
+  <!-- Flash Messages -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+  <div class="alert-container">
+    {% for category, message in messages %}
+    <div class="alert alert-{{ category }}">
+      <span>{{ message | safe }}</span>
+      <button class="alert-close" onclick="dismissAlert(this.closest('.alert'))">✕</button>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% endwith %}
+  <div class="container">
+    <div class="page-header">
+      <h1>🏛️ Authority Dashboard</h1>
+      <p>Manage and resolve sanitation complaints in your area</p>
+    </div>
+    <!-- Filter Tabs -->
+    <div class="filter-tabs">
+      <a href="/authority?status=all"
+         class="filter-tab {% if current_filter == 'all' %}active{% endif %}">
+        🗂️ All ({{ complaints | length }})
+      </a>
+      <a href="/authority?status=Pending"
+         class="filter-tab {% if current_filter == 'Pending' %}active{% endif %}">
+        ⏳ Pending
+      </a>
+      <a href="/authority?status=In Progress"
+         class="filter-tab {% if current_filter == 'In Progress' %}active{% endif %}">
+        🔄 In Progress
+      </a>
+      <a href="/authority?status=Resolved"
+         class="filter-tab {% if current_filter == 'Resolved' %}active{% endif %}">
+        ✅ Resolved
+      </a>
+      <a href="/authority?status=Escalated"
+         class="filter-tab {% if current_filter == 'Escalated' %}active{% endif %}">
+        🚨 Escalated
+      </a>
+    </div>
+    <!-- Complaints List -->
+    {% if complaints %}
+      {% for complaint in complaints %}
+      <div class="complaint-card
+        {% if complaint.status == 'Escalated' %}escalated
+        {% elif complaint.status == 'Resolved' %}resolved{% endif %}">
+        <div class="complaint-header">
+          <!-- Thumbnail -->
+          {% if complaint.image %}
+          <img
+            class="complaint-thumb"
+            src="{{ url_for('uploaded_file', filename=complaint.image) }}"
+            alt="Complaint #{{ complaint.id }}"
+            onclick="openModal('img-modal-{{ complaint.id }}')"
+            title="Click to enlarge"
+          />
+          {% else %}
+          <div style="width:80px;height:80px;border-radius:10px;background:rgba(255,255,255,0.04);
+            border:1px solid var(--clr-border);display:flex;align-items:center;
+            justify-content:center;font-size:2rem;flex-shrink:0">📷</div>
+          {% endif %}
+          <div class="complaint-meta">
+            <h3>
+              Complaint #{{ complaint.id }}
+              <span class="badge badge-{{ complaint.status | lower | replace(' ', '') }}" style="margin-left:0.5rem">
+                {{ complaint.status }}
+              </span>
+              {% if complaint.ai_result == 'Garbage Detected' %}
+                <span class="ai-detected" style="margin-left:0.5rem">🗑️ AI: Verified</span>
+              {% elif complaint.ai_result == 'No Garbage Detected' %}
+                <span class="ai-clean" style="margin-left:0.5rem">✅ AI: Clean</span>
+              {% endif %}
+            </h3>
+            <div class="complaint-info-row">
+              <span>📅 {{ complaint.date }}</span>
+              {% if complaint.location_name %}
+              <span>📌 {{ complaint.location_name }}</span>
+              {% endif %}
+              {% if complaint.latitude and complaint.longitude %}
+              <a href="https://maps.google.com/?q={{ complaint.latitude }},{{ complaint.longitude }}"
+                 target="_blank" class="location-chip" style="text-decoration:none">
+                📍 {{ "%.4f"|format(complaint.latitude) }}, {{ "%.4f"|format(complaint.longitude) }}
+              </a>
+              {% endif %}
+            </div>
+            {% if complaint.description %}
+            <p style="font-size:0.88rem;color:var(--clr-text-muted);line-height:1.6">
+              {{ complaint.description | truncate(150) }}
+            </p>
+            {% endif %}
+          </div>
+        </div>
+        <!-- Resolution proof preview -->
+        {% if complaint.resolution_image %}
+        <div style="margin-bottom:0.75rem">
+          <p class="text-xs text-muted mb-1">✅ Resolution proof uploaded:</p>
+          <img
+            src="{{ url_for('uploaded_file', filename=complaint.resolution_image) }}"
+            alt="Resolution proof"
+            style="height:60px;border-radius:8px;object-fit:cover;border:1px solid rgba(34,197,94,0.3)"
+          />
+        </div>
+        {% endif %}
+        <!-- Update Form -->
+        {% if complaint.status != 'Resolved' %}
+        <div class="update-form">
+          <form method="POST" action="/authority/update/{{ complaint.id }}" enctype="multipart/form-data">
+            <p class="text-xs text-muted mb-1" style="font-weight:600;text-transform:uppercase;letter-spacing:0.04em">Update Status</p>
+            <div class="update-form-row">
+              <select name="status" class="form-control" id="status-{{ complaint.id }}">
+                <option value="Pending"     {% if complaint.status == 'Pending'     %}selected{% endif %}>⏳ Pending</option>
+                <option value="In Progress" {% if complaint.status == 'In Progress' %}selected{% endif %}>🔄 In Progress</option>
+                <option value="Resolved"    {% if complaint.status == 'Resolved'    %}selected{% endif %}>✅ Resolved</option>
+                <option value="Escalated"   {% if complaint.status == 'Escalated'   %}selected{% endif %}>🚨 Escalated</option>
+              </select>
+              <button type="submit" class="btn btn-primary btn-sm">💾 Update</button>
+              <a href="/track/{{ complaint.id }}" class="btn btn-outline btn-sm" target="_blank">👁️ View</a>
+            </div>
+            <div class="resolution-upload">
+              <label for="res-img-{{ complaint.id }}">
+                📸 Upload Resolution Proof
+                <input
+                  type="file"
+                  id="res-img-{{ complaint.id }}"
+                  name="resolution_image"
+                  accept="image/*"
+                  onchange="showFileName(this, 'res-label-{{ complaint.id }}')"
+                />
+              </label>
+              <span id="res-label-{{ complaint.id }}" style="font-size:0.78rem;color:var(--clr-text-dim)">No file chosen</span>
+            </div>
+          </form>
+        </div>
+        {% else %}
+        <div style="margin-top:0.75rem;display:flex;gap:0.5rem">
+          <a href="/track/{{ complaint.id }}" class="btn btn-outline btn-sm">👁️ View Details</a>
+          <span style="padding:0.4rem 0.9rem;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);
+            border-radius:var(--radius);font-size:0.82rem;color:#86efac">
+            ✅ Complaint Resolved
+          </span>
+        </div>
+        {% endif %}
+      </div>
+      <!-- Image Lightbox Modal -->
+      {% if complaint.image %}
+      <div class="modal-overlay" id="img-modal-{{ complaint.id }}">
+        <div class="modal" style="max-width:700px;padding:0;overflow:hidden;background:transparent;border:none">
+          <img
+            src="{{ url_for('uploaded_file', filename=complaint.image) }}"
+            alt="Complaint #{{ complaint.id }}"
+            style="width:100%;border-radius:var(--radius-xl);display:block"
+          />
+          <button
+            onclick="closeModal('img-modal-{{ complaint.id }}')"
+            style="position:absolute;top:1rem;right:1rem;background:rgba(0,0,0,0.6);
+              border:none;color:#fff;border-radius:50%;width:36px;height:36px;
+              font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center"
+          >✕</button>
+        </div>
+      </div>
+      {% endif %}
+      {% endfor %}
+    {% else %}
+    <div class="empty-state">
+      <span class="empty-icon">🎉</span>
+      <h3>No complaints found</h3>
+      <p class="text-muted">
+        {% if current_filter != 'all' %}
+        No complaints with status "{{ current_filter }}".
+        <a href="/authority">View all →</a>
+        {% else %}
+        No complaints have been submitted yet.
+        {% endif %}
+      </p>
+    </div>
+    {% endif %}
+  </div>
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <p>🌿 <strong>CleanTrack AI</strong> — Authority Management Dashboard</p>
+    </div>
+  </footer>
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+  <script>
+    function showFileName(input, labelId) {
+      var label = document.getElementById(labelId);
+      if (label && input.files && input.files[0]) {
+        label.textContent = '📎 ' + input.files[0].name;
+        label.style.color = 'var(--clr-primary)';
+      }
+    }
+  </script>
+</body>
+</html>
